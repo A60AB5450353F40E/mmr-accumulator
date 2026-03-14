@@ -1,0 +1,12 @@
+{
+  "name": "@0353F40E/mmr-accumulator",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/mmr-accumulator.js",
+  "exports": {
+    ".": "./src/mmr-accumulator.js"
+  },
+  "scripts": {
+    "test": "node --test test/mmr-accumulator.test.js"
+  }
+}

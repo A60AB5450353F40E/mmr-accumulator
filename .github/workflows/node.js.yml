@@ -1,0 +1,36 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - 'js/**'
+      - '.github/workflows/nodejs.yml'
+  pull_request:
+    branches: [ "master" ]
+    paths:
+      - 'js/**'
+      - '.github/workflows/nodejs.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: js
+
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: js/package-lock.json
+    - run: npm ci
+    - run: npm test
