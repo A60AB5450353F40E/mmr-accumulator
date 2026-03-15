@@ -49,7 +49,8 @@ Example with 11 leaves (binary 1011):
        ----------------------------------------------------------------------
        0   1  2   3  4   5   6   7   8   9   10         Leaf index
 
-    Note: nodes marked with ' are duplicates; lowercase letters mark the auxiliary subtree; [] mark MMR peaks.
+    Note: nodes are marked in order of appending; those marked with ' are duplicates;
+    lowercase letters mark the auxiliary subtree; [] mark MMR peaks.
 
 Peaks: [14], [17], [18]
 State: { leafCount: 11, peaks: [peak0, peak1, peak2] }
