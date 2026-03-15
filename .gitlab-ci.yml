@@ -2,30 +2,6 @@ stages:
   - test
   - deploy
 
-# JavaScript jobs
-.js-template:
-  stage: test
-  image: node:${NODE_VERSION}
-  rules:
-    - changes:
-        - js/**/*
-        - .gitlab-ci.yml
-  before_script:
-    - cd js
-    - npm ci
-  script:
-    - npm test
-
-js-node-20:
-  extends: .js-template
-  variables:
-    NODE_VERSION: "20"
-
-js-node-22:
-  extends: .js-template
-  variables:
-    NODE_VERSION: "22"
-
 # TypeScript jobs
 .ts-template:
   stage: test
@@ -97,18 +73,6 @@ python-3.13:
   extends: .python-template
   variables:
     PYTHON_VERSION: "3.13"
-
-# Publish JavaScript to GitLab Package Registry
-publish-js-npm:
-  image: node:22
-  stage: deploy
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^js-v/
-  script:
-    - cd js
-    - echo "@0353F40E:registry=https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/" > .npmrc
-    - echo "//${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/:_authToken=${CI_JOB_TOKEN}" >> .npmrc
-    - npm publish
 
 # Publish TypeScript to GitLab Package Registry
 publish-ts-npm:

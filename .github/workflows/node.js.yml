@@ -4,12 +4,12 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - 'js/**'
+      - 'ts/**'
       - '.github/workflows/nodejs.yml'
   pull_request:
     branches: [ "master" ]
     paths:
-      - 'js/**'
+      - 'ts/**'
       - '.github/workflows/nodejs.yml'
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: js
+        working-directory: ts
 
     strategy:
       matrix:
@@ -31,6 +31,6 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-        cache-dependency-path: js/package-lock.json
+        cache-dependency-path: ts/package-lock.json
     - run: npm ci
     - run: npm test
