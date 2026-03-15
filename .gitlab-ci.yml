@@ -2,8 +2,8 @@ stages:
   - test
   - deploy
 
-# Node.js jobs
-.node-template:
+# JavaScript jobs
+.js-template:
   stage: test
   image: node:${NODE_VERSION}
   rules:
@@ -16,13 +16,37 @@ stages:
   script:
     - npm test
 
-node-20:
-  extends: .node-template
+js-node-20:
+  extends: .js-template
   variables:
     NODE_VERSION: "20"
 
-node-22:
-  extends: .node-template
+js-node-22:
+  extends: .js-template
+  variables:
+    NODE_VERSION: "22"
+
+# TypeScript jobs
+.ts-template:
+  stage: test
+  image: node:${NODE_VERSION}
+  rules:
+    - changes:
+        - ts/**/*
+        - .gitlab-ci.yml
+  before_script:
+    - cd ts
+    - npm ci
+  script:
+    - npm test
+
+ts-node-20:
+  extends: .ts-template
+  variables:
+    NODE_VERSION: "20"
+
+ts-node-22:
+  extends: .ts-template
   variables:
     NODE_VERSION: "22"
 
@@ -74,14 +98,28 @@ python-3.13:
   variables:
     PYTHON_VERSION: "3.13"
 
-# Publish to GitLab Package Registry
-publish-npm:
+# Publish JavaScript to GitLab Package Registry
+publish-js-npm:
   image: node:22
   stage: deploy
   rules:
     - if: $CI_COMMIT_TAG =~ /^js-v/
   script:
     - cd js
+    - echo "@0353F40E:registry=https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/" > .npmrc
+    - echo "//${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/:_authToken=${CI_JOB_TOKEN}" >> .npmrc
+    - npm publish
+
+# Publish TypeScript to GitLab Package Registry
+publish-ts-npm:
+  image: node:22
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^ts-v/
+  script:
+    - cd ts
+    - npm ci
+    - npm run build
     - echo "@0353F40E:registry=https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/" > .npmrc
     - echo "//${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/npm/:_authToken=${CI_JOB_TOKEN}" >> .npmrc
     - npm publish

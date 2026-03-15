@@ -1,0 +1,31 @@
+{
+    "name": "@0353F40E/mmr-accumulator",
+    "version": "1.0.0",
+    "type": "module",
+    "main": "dist/src/mmr-accumulator.js",
+    "types": "dist/src/mmr-accumulator.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/src/mmr-accumulator.d.ts",
+            "import": "./dist/src/mmr-accumulator.js"
+        }
+    },
+    "files": [
+        "dist/src"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "test": "npm run build && node --test dist/test/mmr-accumulator.test.js",
+        "prepublishOnly": "npm test"
+    },
+    "dependencies": {
+        "@bitauth/libauth": "^3.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "typescript": "^5.7.0"
+    },
+    "engines": {
+        "node": ">=22.0.0"
+    }
+}
