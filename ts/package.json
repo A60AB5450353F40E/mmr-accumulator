@@ -1,5 +1,5 @@
 {
-    "name": "@0353F40E/mmr-accumulator",
+    "name": "@0353F40E/mmr-accumulator-ts",
     "version": "1.0.0",
     "type": "module",
     "main": "dist/src/mmr-accumulator.js",
