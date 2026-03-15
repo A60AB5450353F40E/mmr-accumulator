@@ -238,14 +238,48 @@ export function extend(state: AccumulatorState, leafHash: Uint8Array): Accumulat
 }
 
 /**
+ * Extend the accumulator with multiple leaves efficiently.
+ * Mutates internally but returns a new immutable state.
+ *
+ * For building from scratch: batchExtend(empty(), leaves)
+ * For extending existing: batchExtend(state, newLeaves)
+ */
+export function batchExtend(
+    state: AccumulatorState,
+    leaves: readonly Uint8Array[]
+): AccumulatorState {
+    if (leaves.length === 0) {
+        return clone(state);
+    }
+
+    // Work with mutable copies
+    let leafCount = state.leafCount;
+    const peaks: Hash[] = state.peaks.map((p) => Uint8Array.from(p));
+
+    for (const leafHash of leaves) {
+        if (leafHash.length !== 32) {
+            throw new Error(`leaf must be 32 bytes, got ${leafHash.length}`);
+        }
+
+        const mergeCount = countTrailingOnes(leafCount);
+        let current: Hash = leafHash;
+
+        for (let i = 0; i < mergeCount; i++) {
+            current = merge(peaks.pop()!, current);
+        }
+
+        peaks.push(current);
+        leafCount++;
+    }
+
+    return { leafCount, peaks };
+}
+
+/**
  * Build an accumulator from an array of leaf hashes.
  */
 export function build(leaves: readonly Uint8Array[]): AccumulatorState {
-    let state = empty();
-    for (const leafHash of leaves) {
-        state = extend(state, leafHash);
-    }
-    return state;
+    return batchExtend(empty(), leaves);
 }
 
 /**

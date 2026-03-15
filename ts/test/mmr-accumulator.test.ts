@@ -7,17 +7,23 @@
 /**
  * MMRAccumulator Test Suite
  *
- * Tests mirror the C++ test suite structure, covering:
- *   - Constructor: rewind, bootstrap_from_last_leaf
- *   - Extend: root_matches_merkle, two_peaks, rewind, bootstrap_from_last_leaf, single_leaf
- *   - GetRoot: accumulator_empty, root_matches_merkle, root_is_peak_power_of_two,
- *              two_peaks, bootstrap_from_last_leaf, single_leaf
- *   - GetPeaks: accumulator_empty, root_is_peak_power_of_two, two_peaks, rewind, single_leaf
- *   - VerifyProofToPeak: accumulator_empty, proof_to_peak, single_leaf
- *   - VerifyProofToRoot: accumulator_empty, proof_to_root, single_leaf
- *   - BootstrapFromProof: bootstrap_from_proof, bootstrap_from_proof_edge_cases
- *   - Equality: rewind
- *   - Rewind pattern: rewind
+ * Tests cover:
+ *   - empty(): initial state, proof rejection
+ *   - extend(): single leaf, root computation, peak structure
+ *   - build(): equivalence to sequential extend, empty input, single leaf
+ *   - batchExtend(): extending existing state, empty batch
+ *   - getRoot(): empty state, merkle root matching, power-of-two optimization, peak bagging
+ *   - getMountain(): peak identification for proof verification
+ *   - verifyProofToPeak(): proof verification against peaks
+ *   - verifyProofToRoot(): proof verification against root
+ *   - bootstrapFromProof(): peak extraction, edge cases (empty, single, power-of-two)
+ *   - create(): peak count validation, negative leaf count rejection
+ *   - clone(): immutability guarantee
+ *   - serialize()/deserialize(): round-trip, empty state, invalid data rejection
+ *   - Bit helpers: popcount, countTrailingOnes, countTrailingZeros, bitWidth
+ *   - Hex utilities: hashToHex, hexToHash, round-trip
+ *   - leaf(): block hash computation, header length validation
+ *   - Rewind pattern: state verification via extension
  */
 
 import { describe, it } from "node:test";
@@ -418,6 +424,73 @@ describe("MMRAccumulator", () => {
 
             assertHashEquals(manualRoot, root10);
             assertHashEquals(root10, tv.root);
+        });
+    });
+
+    describe("build", () => {
+        it("produces same result as sequential extend", () => {
+            const hashes = loadBlockHashes();
+
+            // Build using build()
+            const builtAcc = MMR.build(hashes);
+
+            // Build using sequential extend
+            let extendedAcc = MMR.empty();
+            for (const hash of hashes) {
+                extendedAcc = MMR.extend(extendedAcc, hash);
+            }
+
+            assert.ok(MMR.stateEquals(builtAcc, extendedAcc));
+            assert.strictEqual(builtAcc.leafCount, BigInt(hashes.length));
+        });
+
+        it("handles empty input", () => {
+            const acc = MMR.build([]);
+
+            assert.ok(MMR.stateEquals(acc, MMR.empty()));
+            assert.strictEqual(acc.leafCount, 0n);
+            assert.strictEqual(acc.peaks.length, 0);
+        });
+
+        it("handles single leaf", () => {
+            const hashes = loadBlockHashes();
+            const acc = MMR.build([hashes[0]]);
+
+            assert.strictEqual(acc.leafCount, 1n);
+            assert.strictEqual(acc.peaks.length, 1);
+            assertHashEquals(acc.peaks[0], hashes[0]);
+        });
+    });
+
+    describe("batchExtend", () => {
+        it("extends existing state efficiently", () => {
+            const hashes = loadBlockHashes();
+
+            // Build first 5 leaves one at a time
+            let acc = MMR.empty();
+            for (let i = 0; i < 5; i++) {
+                acc = MMR.extend(acc, hashes[i]);
+            }
+
+            // Batch extend with remaining leaves
+            const batchAcc = MMR.batchExtend(acc, hashes.slice(5));
+
+            // Compare to building all at once
+            const fullAcc = MMR.build(hashes);
+
+            assert.ok(MMR.stateEquals(batchAcc, fullAcc));
+        });
+
+        it("handles empty batch", () => {
+            const hashes = loadBlockHashes();
+            const acc = MMR.build(hashes.slice(0, 5));
+
+            const result = MMR.batchExtend(acc, []);
+
+            assert.ok(MMR.stateEquals(result, acc));
+            // Verify it's a copy, not the same reference
+            assert.notStrictEqual(result, acc);
+            assert.notStrictEqual(result.peaks, acc.peaks);
         });
     });
 
