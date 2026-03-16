@@ -31,7 +31,8 @@ import assert from "node:assert/strict";
 import { hash256 } from "@bitauth/libauth";
 
 import * as MMR from "../src/mmr-accumulator.js";
-import type { Hash, AccumulatorState } from "../src/mmr-accumulator.js";
+import type { AccumulatorState } from "../src/mmr-accumulator.js";
+type Hash = Uint8Array;
 
 // ============================================================================
 // Test vectors
@@ -591,8 +592,24 @@ describe("MMRAccumulator", () => {
                     acc = MMR.extend(acc, hashes[Number(i)]);
                 }
 
-                // Determine mountain height for this leaf
-                const { mountainHeight } = MMR.getMountain(BigInt(height), leafCount);
+                // Compute mountain height for a leaf at `height` (leaf index) given `leafCount`
+                let remaining = leafCount;
+                let mountainStart = 0n;
+                let mountainHeight = 0;
+                let peakIndex = 0;
+
+                while (remaining > 0n) {
+                    mountainHeight = MMR.bitWidth(remaining) - 1;
+                    const mountainSize = 1n << BigInt(mountainHeight);
+
+                    if (BigInt(height) < mountainStart + mountainSize) {
+                        break;
+                    }
+
+                    mountainStart += mountainSize;
+                    remaining -= mountainSize;
+                    peakIndex++;
+                }
 
                 // Check if lone peak
                 const isLonePeak = height + 1 === Number(leafCount) && Number(leafCount) & 1;
