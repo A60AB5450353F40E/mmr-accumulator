@@ -909,3 +909,36 @@ export function hexToHash(hex: string): Uint8Array {
     }
     return hash;
 }
+
+/**
+ * Convert a Bitcoin-style hex string (display order) to internal byte order.
+ * Bitcoin displays hashes in big-endian (reversed) but stores them little-endian.
+ * @param hex - The 64-character hex string in display order.
+ * @returns The 32-byte hash in internal byte order.
+ */
+export function hexToHashReversed(hex: string): Uint8Array {
+    if (hex.length !== 64) {
+        throw new Error(`hex string must be 64 characters, got ${hex.length}`);
+    }
+    const hash = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+        hash[31 - i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+    return hash;
+}
+
+/**
+ * Convert a hash to Bitcoin-style hex string (display order).
+ * Bitcoin displays hashes in big-endian (reversed) but stores them little-endian.
+ * @param hash - The 32-byte hash in internal byte order.
+ * @returns The lowercase hex string in display order.
+ */
+export function hashToHexReversed(hash: Uint8Array): string {
+    const reversed = new Uint8Array(hash.length);
+    for (let i = 0; i < hash.length; i++) {
+        reversed[i] = hash[hash.length - 1 - i];
+    }
+    return Array.from(reversed)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+}
