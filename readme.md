@@ -56,19 +56,22 @@ Peaks: [14], [17], [18]
 State: { leafCount: 11, peaks: [peak0, peak1, peak2] }
 ```
 
-### Security Notes
+### Security
 
-**Duplicate Leaf Ambiguity (CVE-2012-2459).**
-Bitcoin's Merkle tree has a known ambiguity: duplicating the last leaf when the count is odd means different leaf sequences can produce identical roots.
-This could allow a server to prove a leaf at position n-1 as if it existed at position n (the duplicated phantom position), or vice versa.
-The ambiguity affects only the last two leaf positions when the count is odd.
-A client can detect this by checking whether the lowest sibling in the proof equals the leaf being proven; if so, the proof is for a duplicated position.
-For header commitments, the attack is further limited because headers form a hash chain: a duplicated header would need to satisfy both positions' chain linkage requirements, which is infeasible.
-Therefore, a simple sanity check (lowest sibling != leaf) suffices.
+This library implements protections against known Bitcoin Merkle tree vulnerabilities.
+
+**Duplicate Subtree Ambiguity (CVE-2012-2459).**
+Bitcoin's Merkle tree duplicates nodes to balance the tree when the count is not a power of 2.
+This creates an ambiguity: multiple leaf sequences can produce the same root.
+An attacker can exploit this to forge proofs for phantom leaf positions that don't exist in the real tree.
+
+This library detects such forgeries by checking for left-sibling duplicates during proof-to-root verification and bootstrapping.
+Legitimate duplicates from the bagging process only appear as right siblings, so this check has no false positives.
+Proof-to-peak verification is not vulnerable because peaks have a 1-to-1 mapping with the leaf sequence.
 
 **Domain Separation (CVE-2017-12842).**
-Bitcoin's Merkle tree construction lacks domain separation between leaf and internal nodes, which can allow second preimage attacks in some contexts.
-This does not apply to header commitments because all leaves are exactly 80 bytes (the fixed header size), while internal nodes are 64 bytes (two concatenated 32-byte hashes).
+Bitcoin's Merkle tree lacks domain separation between leaf and internal nodes.
+This does not apply to header commitments because leaves are 80 bytes (header size) while internal nodes are 64 bytes (two concatenated hashes).
 The length difference provides implicit domain separation.
 
 ### Operations
