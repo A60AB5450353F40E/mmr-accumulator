@@ -32,6 +32,16 @@ For leaf_count = 11 (binary 1011), the accumulator stores 3 peaks:
 
 Peaks are ordered from tallest to shortest (left to right in the tree).
 The number of peaks equals popcount(leaf_count).
+
+Input Validation Philosophy
+---------------------------
+Functions that construct or modify accumulator state (__init__, extend)
+raise exceptions on invalid input, as they are expected to be called with
+trusted/validated data.
+
+Functions that verify untrusted proofs (verify_proof_to_peak, verify_proof_to_root,
+bootstrap_from_proof) return False or None on invalid input, as they must
+handle adversarial data gracefully without raising exceptions.
 """
 
 from __future__ import annotations
@@ -94,9 +104,6 @@ class MMRAccumulator:
     Uses Bitcoin-style double-SHA256 hashing and supports Bitcoin's Merkle
     tree construction where unpaired nodes are duplicated.
 
-    All hash arguments (leaves, peaks, siblings) must be exactly 32 bytes.
-    Callers are responsible for ensuring this precondition.
-
     Attributes:
         leaf_count: Number of leaves in the MMR.
         peak_count: Number of peaks (equals popcount of leaf_count).
@@ -119,8 +126,8 @@ class MMRAccumulator:
                 equal popcount(leaf_count). Each peak must be 32 bytes.
 
         Raises:
-            ValueError: If leaf_count is negative or peak count doesn't
-                match popcount(leaf_count).
+            ValueError: If leaf_count is negative, peak count doesn't
+                match popcount(leaf_count), or any peak is not 32 bytes.
         """
         if peaks is None:
             peaks = []
@@ -135,8 +142,12 @@ class MMRAccumulator:
                 f"got {len(peaks)}"
             )
 
+        for i, peak in enumerate(peaks):
+            if not isinstance(peak, (bytes, bytearray)) or len(peak) != 32:
+                raise ValueError(f"peak[{i}] must be 32 bytes")
+
         self._leaf_count = leaf_count
-        self._peaks: List[bytes] = list(peaks)
+        self._peaks: List[bytes] = [bytes(p) for p in peaks]
 
     @property
     def leaf_count(self) -> int:
@@ -172,9 +183,15 @@ class MMRAccumulator:
 
         Args:
             leaf: The 32-byte hash of the new leaf (typically a block hash).
+
+        Raises:
+            ValueError: If leaf is not 32 bytes.
         """
+        if not isinstance(leaf, (bytes, bytearray)) or len(leaf) != 32:
+            raise ValueError(f"leaf must be 32 bytes, got {len(leaf) if isinstance(leaf, (bytes, bytearray)) else type(leaf)}")
+
         merge_count = _countr_one(self._leaf_count)
-        current = leaf
+        current = bytes(leaf)
 
         for _ in range(merge_count):
             current = _sha256d(self._peaks.pop(), current)
@@ -236,6 +253,10 @@ class MMRAccumulator:
         the leaf. The proof may be empty when the leaf is a lone peak
         (occurs when leaf_index == leaf_count - 1 and leaf_count is odd).
 
+        No CVE-2012-2459 check is needed: proof-to-peak verifies against
+        trusted accumulator state, which has 1-to-1 mapping with leaf
+        sequence, even if there are duplicate leaves.
+
         Args:
             leaf_index: Zero-based position of the leaf being proven.
             leaf: The 32-byte leaf hash being proven.
@@ -243,7 +264,16 @@ class MMRAccumulator:
 
         Returns:
             True if the computed path matches the expected peak.
+            False if inputs are malformed or proof is invalid.
         """
+        # Input validation.
+        if not isinstance(leaf, (bytes, bytearray)) or len(leaf) != 32:
+            return False
+        for sibling in siblings:
+            if not isinstance(sibling, (bytes, bytearray)) or len(sibling) != 32:
+                return False
+
+        # Malformed proof check.
         if leaf_index < 0 or leaf_index >= self._leaf_count:
             return False
 
@@ -266,14 +296,24 @@ class MMRAccumulator:
             remaining -= mountain_size
             peak_index += 1
 
-        # Proof-to-peak length must equal mountain height.
+        # Malformed proof check.
         if len(siblings) != mountain_height:
             return False
 
-        # Path computation uses leaf_index directly because only the lowest
-        # mountain_height bits matter for orientation, and these bits are
-        # identical to the local offset within the mountain.
-        return self._compute_path(leaf_index, leaf, siblings) == self._peaks[peak_index]
+        # Compute path to peak. Path computation uses leaf_index directly
+        # because only the lowest mountain_height bits matter for orientation,
+        # and these bits are identical to the local offset within the mountain.
+        current = leaf
+        idx = leaf_index
+
+        for sibling in siblings:
+            if idx & 1:
+                current = _sha256d(sibling, current)
+            else:
+                current = _sha256d(current, sibling)
+            idx >>= 1
+
+        return current == self._peaks[peak_index]
 
     def verify_proof_to_root(
         self,
@@ -296,17 +336,46 @@ class MMRAccumulator:
 
         Returns:
             True if the computed path matches get_root().
+            False if inputs are malformed or proof is invalid.
         """
+        # Input validation.
+        if not isinstance(leaf, (bytes, bytearray)) or len(leaf) != 32:
+            return False
+        for sibling in siblings:
+            if not isinstance(sibling, (bytes, bytearray)) or len(sibling) != 32:
+                return False
+
+        # Malformed proof check.
         if leaf_index < 0 or leaf_index >= self._leaf_count:
             return False
 
-        # Bitcoin-style bagging produces a balanced tree; proof length
-        # always equals tree height.
+        # Malformed proof check && trivial verification if well formed.
+        if self._leaf_count == 1:
+            return len(siblings) == 0 and leaf == self._peaks[0]
+
+        # Malformed proof check.
         expected_length = _bit_width(self._leaf_count - 1)
         if len(siblings) != expected_length:
             return False
 
-        return self._compute_path(leaf_index, leaf, siblings) == self.get_root()
+        # Compute path to root with CVE-2012-2459 protection.
+        # The attack exploits bagging ambiguity: multiple MMR states can produce
+        # the same root, allowing forged proofs for phantom positions. We detect
+        # this by rejecting left-sibling duplicates, which only occur in forged
+        # proofs (legitimate duplicates from bagging appear as right siblings).
+        current = leaf
+        idx = leaf_index
+
+        for sibling in siblings:
+            if (idx & 1) and sibling == current:
+                return False
+            if idx & 1:
+                current = _sha256d(sibling, current)
+            else:
+                current = _sha256d(current, sibling)
+            idx >>= 1
+
+        return current == self.get_root()
 
     @classmethod
     def bootstrap_from_proof(
@@ -328,9 +397,17 @@ class MMRAccumulator:
             siblings: Proof-to-root siblings for the last leaf.
 
         Returns:
-            MMRAccumulator with extracted peaks, or None if the proof
-            structure is invalid for the given leaf_count.
+            MMRAccumulator with extracted peaks, or None if inputs are
+            malformed or proof structure is invalid.
         """
+        # Input validation.
+        if not isinstance(last_leaf, (bytes, bytearray)) or len(last_leaf) != 32:
+            return None
+        for sibling in siblings:
+            if not isinstance(sibling, (bytes, bytearray)) or len(sibling) != 32:
+                return None
+
+        # Edge cases.
         if leaf_count < 0:
             return None
 
@@ -339,11 +416,13 @@ class MMRAccumulator:
                 return None
             return cls(0, [])
 
+        # Trivial verification and initialization.
         if leaf_count == 1:
             if len(siblings) != 0:
                 return None
-            return cls(1, [last_leaf])
+            return cls(1, [bytes(last_leaf)])
 
+        # Malformed proof check.
         expected_length = _bit_width(leaf_count - 1)
         if len(siblings) != expected_length:
             return None
@@ -356,19 +435,30 @@ class MMRAccumulator:
         peak_idx = peak_count
         current_height = 0
 
-        # Track path computation for extracting the root as a peak.
-        computed = last_leaf
+        # Track path computation for extracting the root as the only peak
+        # when leaf count is power of two.
+        computed = bytes(last_leaf)
         idx = leaf_count - 1
+
+        # We must guard against CVE-2012-2459 throughout the whole path
+        # (path segments inside & outside MMR structure) because MMR
+        # structure is determined from leaf_count, and it cannot be trusted.
 
         while remaining > 0:
             peak_height = _countr_zero(remaining)
 
-            # Compute path and advance through proof to reach peak height.
+            # Advance through proof to reach peak height.
             while current_height < peak_height:
+                sibling = siblings[proof_idx]
+
+                # CVE-2012-2459 (proof-to-peak segment).
+                if (idx & 1) and sibling == computed:
+                    return None
+
                 if idx & 1:
-                    computed = _sha256d(siblings[proof_idx], computed)
+                    computed = _sha256d(sibling, computed)
                 else:
-                    computed = _sha256d(computed, siblings[proof_idx])
+                    computed = _sha256d(computed, sibling)
                 idx >>= 1
                 proof_idx += 1
                 current_height += 1
@@ -377,11 +467,15 @@ class MMRAccumulator:
 
             if peak_height == 0 and peak_idx == peak_count - 1:
                 # Smallest peak is the last_leaf itself.
-                peaks[peak_idx] = last_leaf
+                peaks[peak_idx] = bytes(last_leaf)
             elif proof_idx < len(siblings):
                 # Next sibling in proof is this peak.
-                peaks[peak_idx] = siblings[proof_idx]
-                # Continue path computation past this peak.
+                peaks[peak_idx] = bytes(siblings[proof_idx])
+
+                # CVE-2012-2459 (proof-to-root segment).
+                if (idx & 1) and siblings[proof_idx] == computed:
+                    return None
+
                 if idx & 1:
                     computed = _sha256d(siblings[proof_idx], computed)
                 else:
@@ -396,39 +490,6 @@ class MMRAccumulator:
             remaining &= remaining - 1
 
         return cls(leaf_count, peaks)  # type: ignore[arg-type]
-
-    @staticmethod
-    def _compute_path(
-        index: int,
-        start: bytes,
-        siblings: List[bytes]
-    ) -> bytes:
-        """
-        Walk a Merkle path and return the computed hash.
-
-        The bits of index determine sibling orientation at each level:
-        a 1-bit means the sibling is on the left (sibling comes first),
-        a 0-bit means the sibling is on the right (current comes first).
-        The lowest bit determines the lowest level's orientation.
-
-        Args:
-            index: Bit pattern determining sibling orientation at each level.
-            start: Initial hash value (the leaf being proven).
-            siblings: Sibling hashes ordered from leaf level upward.
-
-        Returns:
-            The hash computed by walking the path to the root/peak.
-        """
-        current = start
-
-        for sibling in siblings:
-            if index & 1:
-                current = _sha256d(sibling, current)
-            else:
-                current = _sha256d(current, sibling)
-            index >>= 1
-
-        return current
 
     def serialize(self) -> bytes:
         """

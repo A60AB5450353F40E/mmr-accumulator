@@ -15,11 +15,13 @@ Example usage::
     >>> acc = MMRAccumulator()
     >>> acc.extend(block_hash)
     >>> root = acc.get_root()
+    >>> acc.verify_proof_to_root(leaf_index, leaf_hash, siblings)
+    True
 """
 
 from .mmr_accumulator import MMRAccumulator
 
 __all__ = ['MMRAccumulator']
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 __author__ = 'bitcoincashautist'
