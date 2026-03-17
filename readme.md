@@ -92,6 +92,40 @@ Trailing ones in 11 = 2, so merge 2 peaks with new leaf
 
 **bootstrapFromProof(leafCount, lastLeaf, siblings)**: Extract all peaks from a proof-to-root for the last leaf.
 
+## Testing
+
+All implementations share the same [test vectors](test_vectors/mmr_test_vectors.json), ensuring cross-implementation consistency.
+
+### Test Coverage
+
+| Category | Description |
+|----------|-------------|
+| Empty state | Empty accumulator returns correct defaults; proof verification fails |
+| Single leaf | Root equals leaf; empty proofs verify; single peak |
+| Root equivalence | Accumulator root matches known Bitcoin Merkle roots |
+| Peak structure | Power-of-two yields single peak; other counts yield multiple peaks |
+| Two peaks | Independent subtrees combine correctly |
+| Rewind pattern | Past state reconstructed via extend |
+| Proof-to-root | Electrum proofs verify; invalid proofs rejected |
+| Proof-to-peak | Proof lengths match mountain heights |
+| Bootstrap from proof | Peaks extracted from last-leaf proof; state matches reference |
+| Bootstrap edge cases | Empty, single leaf, power-of-two, wrong proof length rejected |
+| CVE-2012-2459 | Forged proofs rejected; attack premise demonstrated |
+| Input validation | Invalid inputs rejected appropriately |
+| Serialization | Roundtrip preserves state |
+
+### Running Tests
+
+**TypeScript:**
+```bash
+cd ts && npm test
+```
+
+**Python:**
+```bash
+cd python && pytest
+```
+
 ## Use Cases
 
 ### Light Client Sync
