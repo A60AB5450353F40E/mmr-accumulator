@@ -17,19 +17,20 @@ This library implements an append-only cryptographic accumulator that maintains 
 |----------|------|---------|
 | TypeScript | [ts/](ts/) | `@0353F40E/mmr-accumulator-ts` |
 | Python | [python/](python/) | `mmr-accumulator` |
+| C++ | [external](https://gitlab.com/0353F40E/bitcoin-cash-node/-/blob/917b15906c29b81c86f2128c1660202f8c5a6a4a/src/shv/test/mmr_accumulator.h) | BCHN source tree |
 
 ## How It Works
 
 Every Bitcoin Merkle tree contains an MMR structure, which is the subset of nodes arranged in complete binary subtrees.
 If leaves are only appended, then the whole MMR structure becomes append-only: new leaves result in new nodes being added on top of existing ones.
-Only the "peaks" of previous state need to be known in order to compute the new nodes.
-The accumulator stores only the "peaks" of complete binary subtrees in the MMR. For n leaves, there are at most log₂(n) peaks, corresponding to the set bits in n.
-From those peaks, Merkle root can be computed by constructing the auxiliary subtree which "bags the peaks" into a single root node.
+Only the "peaks" of the previous state need to be known in order to compute the new nodes.
+The accumulator stores only the peaks of complete binary subtrees in the MMR. For n leaves, there are at most log₂(n) peaks, corresponding to the set bits in n.
+From those peaks, a Merkle root can be computed by constructing the auxiliary subtree which "bags the peaks" into a single root node.
 Proofs can be verified against a peak or against the root.
 
-The leaf count determines the exact structure, and leaf index determines the exact path for the proof.
-When leaf count is represented in binary, the 1s represent mountain peaks and sizes.
-When leaf index is represented in binary, the bits indicate left/right orienation of the sibling: lowest bit for lowest level.
+The leaf count determines the exact structure, and the leaf index determines the exact path for the proof.
+When the leaf count is represented in binary, the 1s represent mountain peak sizes.
+When the leaf index is represented in binary, the bits indicate left/right orientation of the sibling: lowest bit for the lowest level.
 The proof for the last leaf will pass through all the peaks, making bootstrapping from proof possible.
 
 ```text
@@ -45,8 +46,8 @@ Example with 11 leaves (binary 1011):
           /    \        /    \         /      \
          2      5      9      12     [17]      a        Height 1
         / \    / \    / \    /  \    /  \     /  \
-       0   1  3   4  7   8  10  11  15  16  [18]  18'   Height 0 (leaf nodes)
-       ----------------------------------------------------------------------
+       0   1  3   4  7   8  10  11  15  16  [18]  18'   Height 0 (leaves)
+       ------------------------------------------------------------------
        0   1  2   3  4   5   6   7   8   9   10         Leaf index
 
     Note: nodes are marked in order of appending; those marked with ' are duplicates;
@@ -78,7 +79,7 @@ The length difference provides implicit domain separation.
 
 **extend(state, leaf)**: Append a leaf, merging peaks as needed:
 
-```
+```text
 leafCount = 11 (1011) → 12 (1100)
 Trailing ones in 11 = 2, so merge 2 peaks with new leaf
 ```
@@ -97,7 +98,7 @@ Trailing ones in 11 = 2, so merge 2 peaks with new leaf
 
 1. Obtain a trusted root (e.g., from multiple servers or embedded checkpoint).
 2. Bootstrap accumulator from proof-to-root for last header.
-3. Verify new headers by extending and checking work and chain linkage, then extend the accumulator to latest state.
+3. Verify new headers by extending and checking work and chain linkage.
 
 ### Trustless Root Verification
 
@@ -105,15 +106,14 @@ Trailing ones in 11 = 2, so merge 2 peaks with new leaf
 2. Compare final root against known checkpoint.
 3. State size remains O(log n) regardless of chain length.
 
-### Spot-verification of Headers
+### Spot-Verification of Headers
 
 Verify any past header against the trusted or independently verified checkpoint.
 
 ## Specification
 
-See "CHIP-2026-02: Simplified Header Verification for Bitcoin Cash" [SHV Client Specification](https://gitlab.com/0353F40E/mmr#shv-client-specification) section for the complete protocol specification.
+See the CHIP-2026-02 [SHV Client Specification](https://gitlab.com/0353F40E/mmr#shv-client-specification) for the complete protocol specification.
 
 ## License
 
-MIT License.
-See [LICENSE](LICENSE) for details.
+MIT License. See [LICENSE](LICENSE) for details.
