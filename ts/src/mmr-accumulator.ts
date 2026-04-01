@@ -541,23 +541,12 @@ export function verifyProofToPeak(
     }
 
     // Find which peak covers this leaf.
-    let remaining = state.leafCount;
-    let mountainStart = 0n;
-    let mountainHeight = 0;
-    let peakIndex = 0;
-
-    while (remaining > 0n) {
-        mountainHeight = bitWidth(remaining) - 1;
-        const mountainSize = 1n << BigInt(mountainHeight);
-
-        if (leafIndex < mountainStart + mountainSize) {
-            break;
-        }
-
-        mountainStart += mountainSize;
-        remaining -= mountainSize;
-        peakIndex++;
-    }
+    // XOR identifies where leafIndex and leafCount differ; the highest
+    // differing bit indicates the mountain boundary.
+    const diff = leafIndex ^ state.leafCount;
+    const diffWidth = bitWidth(diff);
+    const mountainHeight = diffWidth - 1;
+    const peakIndex = popcount(state.leafCount >> BigInt(diffWidth));
 
     // Malformed proof check.
     if (siblings.length !== mountainHeight) {

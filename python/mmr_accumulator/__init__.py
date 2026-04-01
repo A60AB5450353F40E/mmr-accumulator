@@ -23,5 +23,5 @@ from .mmr_accumulator import MMRAccumulator
 
 __all__ = ['MMRAccumulator']
 
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 __author__ = 'bitcoincashautist'

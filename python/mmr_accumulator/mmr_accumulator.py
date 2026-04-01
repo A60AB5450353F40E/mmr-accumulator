@@ -277,24 +277,13 @@ class MMRAccumulator:
         if leaf_index < 0 or leaf_index >= self._leaf_count:
             return False
 
-        # Find which mountain (peak) covers this leaf by iterating through
-        # mountains left to right. Each mountain's size is a power of two
-        # determined by the highest set bit in the remaining leaf count.
-        remaining = self._leaf_count
-        mountain_start = 0
-        mountain_height = 0
-        peak_index = 0
-
-        while remaining > 0:
-            mountain_height = _bit_width(remaining) - 1
-            mountain_size = 1 << mountain_height
-
-            if leaf_index < mountain_start + mountain_size:
-                break
-
-            mountain_start += mountain_size
-            remaining -= mountain_size
-            peak_index += 1
+        # Find which peak covers this leaf.
+        # XOR identifies where leaf_index and leaf_count differ; the highest
+        # differing bit indicates the mountain boundary.
+        diff = leaf_index ^ self._leaf_count
+        diff_width = _bit_width(diff)
+        mountain_height = diff_width - 1
+        peak_index = _popcount(self._leaf_count >> diff_width)
 
         # Malformed proof check.
         if len(siblings) != mountain_height:
